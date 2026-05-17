@@ -1151,29 +1151,61 @@ def apply_style() -> None:
             border-radius: 14px;
             border: 1px solid rgba(22, 32, 31, 0.11);
             background: rgba(255, 255, 255, 0.78);
-            color: var(--ink);
+            color: var(--ink) !important;
             font-weight: 700;
             box-shadow: 0 8px 24px rgba(22, 32, 31, 0.07);
             white-space: normal;
         }
 
+        .stButton > button *,
+        .stButton > button p {
+            color: var(--ink) !important;
+        }
+
         .stButton > button:hover {
             border-color: rgba(15, 118, 110, 0.35);
             background: #ffffff;
-            color: #0f766e;
+            color: #0f766e !important;
+        }
+
+        .stButton > button:hover *,
+        .stButton > button:hover p {
+            color: #0f766e !important;
         }
 
         [data-testid="stChatMessage"] {
             padding: 1rem 1.1rem;
             border-radius: 18px;
             border: 1px solid var(--line);
-            background: rgba(255, 255, 255, 0.82);
+            background: rgba(255, 255, 255, 0.94);
+            color: var(--ink) !important;
             box-shadow: 0 10px 28px rgba(22, 32, 31, 0.08);
+        }
+
+        [data-testid="stChatMessage"] *,
+        [data-testid="stChatMessage"] p,
+        [data-testid="stChatMessage"] li,
+        [data-testid="stChatMessage"] span,
+        [data-testid="stChatMessage"] div[data-testid="stMarkdownContainer"] {
+            color: var(--ink) !important;
+        }
+
+        [data-testid="stChatMessage"] small,
+        [data-testid="stChatMessage"] [data-testid="stCaptionContainer"],
+        [data-testid="stChatMessage"] [data-testid="stCaptionContainer"] * {
+            color: #42524f !important;
         }
 
         [data-testid="stChatMessage"]:has([data-testid="chatAvatarIcon-user"]) {
             background: #e8f8f2;
             border-color: rgba(15, 118, 110, 0.18);
+        }
+
+        [data-testid="stExpander"] summary,
+        [data-testid="stExpander"] summary *,
+        [data-testid="stExpander"] p,
+        [data-testid="stExpander"] span {
+            color: var(--ink) !important;
         }
 
         [data-testid="stChatInput"] {
@@ -1185,6 +1217,11 @@ def apply_style() -> None:
             border-radius: 18px;
             border: 1px solid rgba(22, 32, 31, 0.13);
             box-shadow: 0 14px 35px rgba(22, 32, 31, 0.10);
+            color: var(--ink) !important;
+        }
+
+        [data-testid="stChatInput"] textarea::placeholder {
+            color: #697874 !important;
         }
 
         .stDataFrame {

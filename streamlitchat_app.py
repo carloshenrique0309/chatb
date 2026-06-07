@@ -39,58 +39,58 @@ PERIOD_SQL = "make_date(trim(ano_aih)::int, trim(mes_aih)::int, 1)"
 PERIOD_LABEL_SQL = "lpad(trim(mes_aih), 2, '0') || '/' || trim(ano_aih)"
 
 SUBGROUP_LABELS = {
-    "0101": "Acoes de promocao e prevencao em saude",
+    "0101": "Ações de promoção e prevenção em saúde",
     "0201": "Coleta de material",
-    "0202": "Diagnostico em laboratorio clinico",
-    "0203": "Diagnostico por anatomia patologica e citopatologia",
-    "0204": "Diagnostico por radiologia",
-    "0205": "Diagnostico por ultrassonografia",
-    "0206": "Diagnostico por tomografia",
-    "0207": "Diagnostico por ressonancia magnetica",
-    "0208": "Diagnostico por medicina nuclear in vivo",
-    "0209": "Diagnostico por endoscopia",
-    "0210": "Diagnostico por radiologia intervencionista",
-    "0211": "Metodos diagnosticos em especialidades",
-    "0212": "Diagnostico e procedimentos especiais em hemoterapia",
-    "0214": "Diagnostico por teste rapido",
+    "0202": "Diagnóstico em laboratório clínico",
+    "0203": "Diagnóstico por anatomia patológica e citopatologia",
+    "0204": "Diagnóstico por radiologia",
+    "0205": "Diagnóstico por ultrassonografia",
+    "0206": "Diagnóstico por tomografia",
+    "0207": "Diagnóstico por ressonância magnética",
+    "0208": "Diagnóstico por medicina nuclear in vivo",
+    "0209": "Diagnóstico por endoscopia",
+    "0210": "Diagnóstico por radiologia intervencionista",
+    "0211": "Métodos diagnósticos em especialidades",
+    "0212": "Diagnóstico e procedimentos especiais em hemoterapia",
+    "0214": "Diagnóstico por teste rápido",
     "0301": "Consultas, atendimentos e acompanhamentos",
     "0302": "Fisioterapia",
-    "0303": "Tratamentos clinicos",
+    "0303": "Tratamentos clínicos",
     "0304": "Tratamento em oncologia",
     "0305": "Tratamento em nefrologia",
     "0306": "Hemoterapia",
-    "0307": "Tratamentos odontologicos",
-    "0308": "Tratamento de lesoes, envenenamentos e outros",
+    "0307": "Tratamentos odontológicos",
+    "0308": "Tratamento de lesões, envenenamentos e outros",
     "0309": "Terapias especializadas",
     "0310": "Parto e nascimento",
     "0401": "Pequenas cirurgias e cirurgias de pele",
-    "0402": "Cirurgia de glandulas endocrinas",
-    "0403": "Cirurgia do sistema nervoso central e periferico",
-    "0404": "Cirurgia das vias aereas superiores, face, cabeca e pescoco",
-    "0405": "Cirurgia do aparelho da visao",
-    "0406": "Cirurgia do aparelho circulatorio",
-    "0407": "Cirurgia do aparelho digestivo, orgaos anexos e parede abdominal",
+    "0402": "Cirurgia de glândulas endócrinas",
+    "0403": "Cirurgia do sistema nervoso central e periférico",
+    "0404": "Cirurgia das vias aéreas superiores, face, cabeça e pescoço",
+    "0405": "Cirurgia do aparelho da visão",
+    "0406": "Cirurgia do aparelho circulatório",
+    "0407": "Cirurgia do aparelho digestivo, órgãos anexos e parede abdominal",
     "0408": "Cirurgia do sistema osteomuscular",
-    "0409": "Cirurgia do aparelho geniturinario",
+    "0409": "Cirurgia do aparelho geniturinário",
     "0410": "Cirurgia de mama",
-    "0411": "Cirurgia obstetrica",
-    "0412": "Cirurgia toracica",
+    "0411": "Cirurgia obstétrica",
+    "0412": "Cirurgia torácica",
     "0413": "Cirurgia reparadora",
     "0414": "Bucomaxilofacial",
     "0415": "Outras cirurgias",
     "0416": "Cirurgia em oncologia",
     "0417": "Anestesiologia",
     "0418": "Cirurgia em nefrologia",
-    "0501": "Coleta e exames para doacao de orgaos",
-    "0502": "Avaliacao de morte encefalica",
-    "0503": "Acoes relacionadas a doacao de orgaos",
+    "0501": "Coleta e exames para doação de órgãos",
+    "0502": "Avaliação de morte encefálica",
+    "0503": "Ações relacionadas à doação de órgãos",
     "0504": "Processamento de tecidos para transplante",
-    "0505": "Transplante de orgaos, tecidos e celulas",
-    "0506": "Acompanhamento e intercorrencias no pre e pos-transplante",
-    "0603": "Medicamentos de ambito hospitalar",
-    "0702": "Ortese, protese e materiais especiais relacionados ao ato cirurgico",
-    "0801": "Acoes relacionadas ao estabelecimento",
-    "0802": "Acoes relacionadas ao atendimento",
+    "0505": "Transplante de órgãos, tecidos e células",
+    "0506": "Acompanhamento e intercorrências no pré e pós-transplante",
+    "0603": "Medicamentos de âmbito hospitalar",
+    "0702": "Órtese, prótese e materiais especiais relacionados ao ato cirúrgico",
+    "0801": "Ações relacionadas ao estabelecimento",
+    "0802": "Ações relacionadas ao atendimento",
 }
 
 QTD_SUBGROUP_CODES = [
@@ -839,11 +839,11 @@ def describe_filters(filters: Filters) -> str:
     elif filters.year:
         parts.append(str(filters.year))
     else:
-        parts.append("todos os periodos")
+        parts.append("todos os períodos")
     if filters.uf:
         parts.append(filters.uf)
     if filters.municipality:
-        parts.append(f"municipio contendo '{filters.municipality}'")
+        parts.append(f"município contendo '{filters.municipality}'")
     return " | ".join(parts)
 
 
@@ -873,8 +873,8 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
         )
         row = frame.iloc[0]
         return (
-            f"A base tem {int(row.linhas):,} linhas, {int(row.periodos)} periodos e "
-            f"{int(row.municipios):,} municipios/linhas municipais.".replace(",", "."),
+            f"A base tem {int(row.linhas):,} linhas, {int(row.periodos)} períodos e "
+            f"{int(row.municipios):,} municípios/linhas municipais.".replace(",", "."),
             frame,
             None,
             sql_for_base_info(),
@@ -888,7 +888,7 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
             f"O maior subgrupo para {describe_filters(filters)} foi "
             f"{frame.iloc[0]['subgrupo_nome']} com {format_number(total, filters.content)}."
             if not frame.empty
-            else "Nao encontrei resultado para esses filtros."
+            else "Não encontrei resultado para esses filtros."
         )
         return message, frame, "bar", sql_for_top_subgroups(filters, limit), "Fallback por regras"
 
@@ -899,30 +899,30 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
             f"A UF com maior total para {describe_filters(filters)} foi "
             f"{frame.iloc[0]['municipio_uf']} com {format_number(total, filters.content)}."
             if not frame.empty
-            else "Nao encontrei resultado para esses filtros."
+            else "Não encontrei resultado para esses filtros."
         )
         return message, frame.head(limit), "bar", sql_for_top_ufs(filters, limit), "Fallback por regras"
 
     if any(term in text for term in ["evolucao", "mensal", "por mes", "serie"]):
         frame = timeline(filters)
-        return f"Evolucao mensal para {describe_filters(filters)}.", frame, "line", sql_for_timeline(filters), "Fallback por regras"
+        return f"Evolução mensal para {describe_filters(filters)}.", frame, "line", sql_for_timeline(filters), "Fallback por regras"
 
     if any(term in text for term in ["maior", "ranking", "top", "municipios", "cidades"]):
         frame = top_municipalities(filters, limit=limit)
         total = frame.iloc[0]["total"] if not frame.empty else 0
         message = (
-            f"O maior municipio para {describe_filters(filters)} foi "
+            f"O maior município para {describe_filters(filters)} foi "
             f"{frame.iloc[0]['municipio_nome']} ({frame.iloc[0]['municipio_uf']}) "
             f"com {format_number(total, filters.content)}."
             if not frame.empty
-            else "Nao encontrei resultado para esses filtros."
+            else "Não encontrei resultado para esses filtros."
         )
         return message, frame, "bar", sql_for_top_municipalities(filters, limit), "Fallback por regras"
 
     if "total" in text or "soma" in text:
         frame = metric_summary(filters)
         total = frame.iloc[0]["total"] if not frame.empty else 0
-        message = f"O total para {describe_filters(filters)} e {format_number(total, filters.content)}."
+        message = f"O total para {describe_filters(filters)} é {format_number(total, filters.content)}."
         return message, frame, None, sql_for_metric_summary(filters), "Fallback por regras"
 
     if filters.municipality:
@@ -930,8 +930,8 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
         return f"Resultado para {describe_filters(filters)}.", frame, "bar", sql_for_top_municipalities(filters, limit), "Fallback por regras"
 
     return (
-        "Posso responder totais, maiores municipios, ranking por UF, ranking por subgrupo "
-        "e evolucao mensal. Exemplo: total de quantidade aprovada em janeiro de 2026.",
+        "Posso responder totais, maiores municípios, ranking por UF, ranking por subgrupo "
+        "e evolução mensal. Exemplo: total de quantidade aprovada em janeiro de 2026.",
         None,
         None,
         None,
@@ -1072,12 +1072,12 @@ def render_chat() -> None:
         <section class="chat-hero">
             <div>
                 <p class="eyebrow">SIH/SUS DATASUS</p>
-                <h1>Chat da Producao Hospitalar</h1>
-                <p class="hero-copy">Consulte a base carregada no PostgreSQL usando perguntas em linguagem natural.</p>
+                <h1>Assistente SIH/SUS - AIH Hospitalar</h1>
+                <p class="hero-copy">Faça perguntas sobre a produção hospitalar e veja a consulta SQL executada junto com o resultado.</p>
             </div>
             <div class="status-card">
                 <span></span>
-                Banco conectado
+                Tabela: public.sus_aih
             </div>
         </section>
         """,
@@ -1085,9 +1085,9 @@ def render_chat() -> None:
     )
 
     model_status = (
-        f"Ativo: Gemini 2.5 Flash ({GEMINI_MODEL})"
+        f"Gemini 2.5 Flash ativo ({GEMINI_MODEL})"
         if get_gemini_api_key()
-        else "Preparado para Gemini 2.5 Flash; usando fallback por regras ate configurar a chave"
+        else "Fallback por regras ativo, com consultas protegidas por guardrails"
     )
     st.markdown(
         f"""
@@ -1099,19 +1099,11 @@ def render_chat() -> None:
         unsafe_allow_html=True,
     )
 
-    with st.expander("Configurar chave do Gemini"):
-        st.text_input(
-            "GEMINI_API_KEY",
-            type="password",
-            key="gemini_api_key",
-            help="Cole aqui a chave do Google AI Studio para ativar o Gemini 2.5 Flash nesta sessao.",
-        )
-
     if "messages" not in st.session_state:
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Oi, Carlos. Pode perguntar sobre quantidade aprovada, valor aprovado, municipios, UFs, periodos ou subgrupos.",
+                "content": "Oi, Carlos. Pode perguntar sobre quantidade aprovada, valor aprovado, municípios, UFs, períodos ou subgrupos.",
             }
         ]
 
@@ -1145,7 +1137,7 @@ def render_chat() -> None:
                 st.table(frame)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    prompt = st.chat_input("Digite sua pergunta")
+    prompt = st.chat_input("Pergunte sobre a tabela public.sus_aih")
     prompt = selected_prompt or prompt
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
@@ -1399,7 +1391,7 @@ def apply_style() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="SIH/SUS Chat", layout="wide")
+    st.set_page_config(page_title="Assistente SIH/SUS AIH", layout="wide")
     apply_style()
     render_chat()
 

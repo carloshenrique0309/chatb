@@ -32,7 +32,8 @@ DB_CONFIG = {
 }
 
 FACT_TABLE = "public.sus_aih"
-GEMINI_MODEL = "gemini-2.5-flash"
+BEDROCK_MODEL_ID = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
+BEDROCK_REGION = "us-east-2"
 STATEMENT_TIMEOUT_MS = 20000
 
 PERIOD_SQL = "make_date(trim(ano_aih)::int, trim(mes_aih)::int, 1)"
@@ -277,6 +278,20 @@ def subgroup_column(content: str, code: str) -> str:
     return f"vl_{code}" if content == "valor_aprovado" else f"qtd_{code}"
 
 
+def has_subgroup_column(content: str, code: str) -> bool:
+    return code in subgroup_codes(content)
+
+
+def subgroup_prompt_dictionary() -> str:
+    lines: list[str] = []
+    for code in QTD_SUBGROUP_CODES:
+        qtd_column = f"qtd_{code}"
+        value_column = f"vl_{code}" if code in VALUE_SUBGROUP_CODES else "sem coluna de valor"
+        label = SUBGROUP_LABELS.get(code, code)
+        lines.append(f"- {code}: quantidade={qtd_column}; valor={value_column}; nome={label}")
+    return "\n".join(lines)
+
+
 def validate_safe_sql(sql: str) -> str:
     sql = sql.strip().rstrip(";")
     compact = re.sub(r"\s+", " ", sql).strip()
@@ -331,20 +346,24 @@ def cached_query(sql: str, params: tuple[Any, ...] = ()) -> pd.DataFrame:
     return run_query(sql, params)
 
 
-def get_gemini_api_key() -> str | None:
-    session_key = st.session_state.get("gemini_api_key") if hasattr(st, "session_state") else None
-    if session_key:
-        return session_key.strip()
-
-    for key_name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+def get_bedrock_api_key() -> str | None:
+    for key_name in ("AWS_BEARER_TOKEN_BEDROCK", "BEDROCK_API_KEY"):
         value = os.environ.get(key_name)
         if value:
             return value.strip()
 
     try:
-        return st.secrets.get("GEMINI_API_KEY") or st.secrets.get("GOOGLE_API_KEY")
+        return st.secrets.get("AWS_BEARER_TOKEN_BEDROCK") or st.secrets.get("BEDROCK_API_KEY")
     except Exception:
         return None
+
+
+def get_bedrock_model_id() -> str:
+    return get_secret("BEDROCK_MODEL_ID", BEDROCK_MODEL_ID) or BEDROCK_MODEL_ID
+
+
+def get_bedrock_region() -> str:
+    return get_secret("BEDROCK_REGION", BEDROCK_REGION) or BEDROCK_REGION
 
 
 @st.cache_data(ttl=1800)
@@ -519,9 +538,20 @@ order by total desc
 limit {limit};"""
 
 
+def sql_for_subgroup_total(filters: Filters, code: str) -> str:
+    total_column = subgroup_column(filters.content, code)
+    subgrupo_nome = SUBGROUP_LABELS.get(code, code)
+    return f"""select
+    {sql_literal(code)} as subgrupo_codigo,
+    {sql_literal(subgrupo_nome)} as subgrupo_nome,
+    sum(coalesce({total_column}, 0)) as total
+from {FACT_TABLE}
+where {build_display_where(filters)};"""
+
+
 def get_schema_prompt() -> str:
     return f"""
-Voce e um agente gerador de SQL para PostgreSQL.
+Você é um agente gerador de SQL para PostgreSQL.
 Gere apenas consultas SELECT seguras sobre a base SIH/SUS.
 
 Tabelas disponiveis:
@@ -535,6 +565,9 @@ Tabelas disponiveis:
    - vl_total NUMERIC: valor aprovado
    - colunas qtd_XXXX e vl_XXXX: totais por subgrupo de procedimento
 
+Dicionário de subgrupos:
+{subgroup_prompt_dictionary()}
+
 Regras obrigatorias:
 - Responda somente em JSON valido.
 - Use somente SELECT ou WITH.
@@ -543,6 +576,8 @@ Regras obrigatorias:
 - Para "quantidade aprovada", use qtd_total.
 - Para "valor aprovado", use vl_total.
 - Use coalesce(qtd_total, 0) ou coalesce(vl_total, 0) ao somar ou ordenar totais.
+- Para subgrupos, use a coluna do dicionário. Exemplo: valor aprovado do subgrupo 0204 usa vl_0204; quantidade aprovada do subgrupo 0204 usa qtd_0204.
+- Para ranking de subgrupos, faça um unpivot com cross join lateral values usando as colunas qtd_XXXX ou vl_XXXX.
 - Para datas mensais, use make_date(trim(ano_aih)::int, trim(mes_aih)::int, 1).
 - Janeiro de 2026 deve ser filtrado como trim(ano_aih)::int = 2026 e trim(mes_aih)::int = 1.
 - Para municipio, use trim(nome_municipio). Para UF, use trim(uf_sigla).
@@ -582,29 +617,34 @@ def validate_generated_sql(sql: str) -> str:
     return validate_safe_sql(sql)
 
 
-def call_gemini_for_sql(question: str) -> dict[str, Any]:
-    api_key = get_gemini_api_key()
+def call_bedrock_for_sql(question: str) -> dict[str, Any]:
+    api_key = get_bedrock_api_key()
     if not api_key:
-        raise RuntimeError("GEMINI_API_KEY nao configurada.")
+        raise RuntimeError("AWS_BEARER_TOKEN_BEDROCK nao configurada.")
 
-    endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+    model_id = get_bedrock_model_id()
+    region = get_bedrock_region()
+    endpoint = f"https://bedrock-runtime.{region}.amazonaws.com/model/{model_id}/converse"
     prompt = f"{get_schema_prompt()}\n\nPergunta do usuario:\n{question}"
     payload = {
-        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-        "generationConfig": {
+        "messages": [{"role": "user", "content": [{"text": prompt}]}],
+        "inferenceConfig": {
             "temperature": 0,
-            "responseMimeType": "application/json",
+            "maxTokens": 1200,
         },
     }
     response = requests.post(
         endpoint,
-        params={"key": api_key},
         json=payload,
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        },
         timeout=45,
     )
     response.raise_for_status()
     data = response.json()
-    text = data["candidates"][0]["content"]["parts"][0]["text"]
+    text = data["output"]["message"]["content"][0]["text"]
     parsed = extract_json_from_text(text)
     parsed["sql"] = validate_generated_sql(parsed["sql"])
     parsed["chart_type"] = parsed.get("chart_type") or "none"
@@ -615,24 +655,24 @@ def call_gemini_for_sql(question: str) -> dict[str, Any]:
 def summarize_llm_result(question: str, frame: pd.DataFrame, parsed: dict[str, Any]) -> str:
     content_key = parsed.get("content_key", detect_content(question))
     if frame.empty:
-        return "O Gemini gerou a consulta, mas nao encontrei registros para esses filtros."
+        return "O Amazon Bedrock gerou a consulta, mas não encontrei registros para esses filtros."
 
     first = frame.iloc[0]
     if "municipio_nome" in frame.columns and "total" in frame.columns:
         uf = f" ({first['municipio_uf']})" if "municipio_uf" in frame.columns else ""
-        return f"Segundo a consulta gerada pelo Gemini, o principal municipio foi {first['municipio_nome']}{uf}, com {format_number(first['total'], content_key)}."
+        return f"Segundo a consulta gerada pelo Amazon Bedrock, o principal município foi {first['municipio_nome']}{uf}, com {format_number(first['total'], content_key)}."
 
     if "municipio_uf" in frame.columns and "total" in frame.columns:
-        return f"Segundo a consulta gerada pelo Gemini, a principal UF foi {first['municipio_uf']}, com {format_number(first['total'], content_key)}."
+        return f"Segundo a consulta gerada pelo Amazon Bedrock, a principal UF foi {first['municipio_uf']}, com {format_number(first['total'], content_key)}."
 
     if "subgrupo_nome" in frame.columns and "total" in frame.columns:
-        return f"Segundo a consulta gerada pelo Gemini, o principal subgrupo foi {first['subgrupo_nome']}, com {format_number(first['total'], content_key)}."
+        return f"Segundo a consulta gerada pelo Amazon Bedrock, o principal subgrupo foi {first['subgrupo_nome']}, com {format_number(first['total'], content_key)}."
 
     if "total" in frame.columns and len(frame) == 1:
-        return f"Segundo a consulta gerada pelo Gemini, o total encontrado foi {format_number(first['total'], content_key)}."
+        return f"Segundo a consulta gerada pelo Amazon Bedrock, o total encontrado foi {format_number(first['total'], content_key)}."
 
-    explanation = parsed.get("explanation") or "Consulta gerada pelo Gemini 2.5 Flash."
-    return f"{explanation} Retornei {len(frame)} linha(s) para analise."
+    explanation = parsed.get("explanation") or "Consulta gerada pelo Amazon Bedrock."
+    return f"{explanation} Retornei {len(frame)} linha(s) para análise."
 
 
 def metric_summary(filters: Filters) -> pd.DataFrame:
@@ -733,6 +773,23 @@ def top_subgroups(filters: Filters, limit: int = 15) -> pd.DataFrame:
     )
 
 
+def subgroup_total(filters: Filters, code: str) -> pd.DataFrame:
+    where_sql, params = build_where(filters)
+    total_column = subgroup_column(filters.content, code)
+    subgrupo_nome = SUBGROUP_LABELS.get(code, code)
+    return cached_query(
+        f"""
+        select
+            %s as subgrupo_codigo,
+            %s as subgrupo_nome,
+            sum(coalesce({total_column}, 0)) as total
+        from {FACT_TABLE}
+        where {where_sql}
+        """,
+        tuple([code, subgrupo_nome] + params),
+    )
+
+
 def data_sample(filters: Filters, limit: int = 200) -> pd.DataFrame:
     where_sql, params = build_where(filters)
     total_column = metric_expr(filters.content)
@@ -802,6 +859,13 @@ def detect_limit(question: str, default: int = 10) -> int:
     return min(max(value, 1), 30)
 
 
+def detect_subgroup_code(question: str) -> str | None:
+    for code in re.findall(r"\b\d{4}\b", question):
+        if code in SUBGROUP_LABELS:
+            return code
+    return None
+
+
 def detect_municipality(question: str) -> str | None:
     text = normalize_text(question)
     patterns = [
@@ -858,6 +922,7 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
         municipality=detect_municipality(question),
     )
     limit = detect_limit(question)
+    subgroup_code = detect_subgroup_code(question)
 
     if any(term in text for term in ["periodos", "base", "registros", "linhas"]):
         frame = cached_query(
@@ -880,6 +945,27 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
             sql_for_base_info(),
             "Fallback por regras",
         )
+
+    if subgroup_code:
+        if not has_subgroup_column(filters.content, subgroup_code):
+            label = CONTENT_LABELS[filters.content]
+            subgrupo_nome = SUBGROUP_LABELS.get(subgroup_code, subgroup_code)
+            return (
+                f"Não existe coluna de {label.lower()} para o subgrupo {subgroup_code} - {subgrupo_nome} nesta tabela.",
+                None,
+                None,
+                None,
+                "Fallback por regras",
+            )
+
+        frame = subgroup_total(filters, subgroup_code)
+        total = frame.iloc[0]["total"] if not frame.empty else 0
+        subgrupo_nome = SUBGROUP_LABELS.get(subgroup_code, subgroup_code)
+        message = (
+            f"O total do subgrupo {subgroup_code} - {subgrupo_nome} para "
+            f"{describe_filters(filters)} é {format_number(total, filters.content)}."
+        )
+        return message, frame, None, sql_for_subgroup_total(filters, subgroup_code), "Fallback por regras"
 
     if "subgrupo" in text or "procedimento" in text:
         frame = top_subgroups(filters, limit=limit)
@@ -940,9 +1026,9 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
 
 
 def answer_question(question: str) -> tuple[str, pd.DataFrame | None, str | None, str | None, str]:
-    if get_gemini_api_key():
+    if get_bedrock_api_key():
         try:
-            parsed = call_gemini_for_sql(question)
+            parsed = call_bedrock_for_sql(question)
             frame = cached_query(parsed["sql"])
             message = summarize_llm_result(question, frame, parsed)
             return (
@@ -950,15 +1036,15 @@ def answer_question(question: str) -> tuple[str, pd.DataFrame | None, str | None
                 frame,
                 parsed.get("chart_type"),
                 parsed["sql"],
-                f"Gemini 2.5 Flash ({GEMINI_MODEL})",
+                f"Amazon Bedrock ({get_bedrock_model_id()})",
             )
         except Exception as exc:
             fallback_answer, frame, chart_type, sql_query, _ = answer_question_rules(question)
             message = (
-                f"Nao consegui usar o Gemini nesta pergunta, entao respondi pelo fallback por regras. "
+                f"Não consegui usar o Amazon Bedrock nesta pergunta, então respondi pelo fallback por regras. "
                 f"{fallback_answer}"
             )
-            return message, frame, chart_type, sql_query, f"Fallback por regras - Gemini indisponivel: {exc}"
+            return message, frame, chart_type, sql_query, f"Fallback por regras - Bedrock indisponível: {exc}"
 
     return answer_question_rules(question)
 
@@ -1085,9 +1171,9 @@ def render_chat() -> None:
     )
 
     model_status = (
-        f"Gemini 2.5 Flash ativo ({GEMINI_MODEL})"
-        if get_gemini_api_key()
-        else "Fallback por regras ativo, com consultas protegidas por guardrails"
+        f"Amazon Bedrock ativo ({get_bedrock_model_id()})"
+        if get_bedrock_api_key()
+        else "Amazon Bedrock configurável por Secrets; fallback por regras ativo"
     )
     st.markdown(
         f"""

@@ -23,18 +23,130 @@ warnings.filterwarnings(
 )
 
 DB_CONFIG = {
-    "host": "dataiesb.iesbtech.com.br",
+    "host": "bigdata.dataiesb.com",
     "port": 5432,
-    "dbname": "2312120014_Carlos",
-    "user": "2312120014_Carlos",
-    "password": "2312120014_Carlos",
+    "dbname": "iesb",
+    "user": "data_iesb",
+    "password": "iesb",
     "connect_timeout": 20,
 }
 
-FACT_TABLE = "public.sih_sus_aih_spabr_clean"
-SUBGROUP_TABLE = "public.sih_subgrupo_procedimento"
-LONG_VIEW = "public.vw_sih_sus_aih_spabr_long"
+FACT_TABLE = "public.sus_aih"
 GEMINI_MODEL = "gemini-2.5-flash"
+STATEMENT_TIMEOUT_MS = 20000
+
+PERIOD_SQL = "make_date(trim(ano_aih)::int, trim(mes_aih)::int, 1)"
+PERIOD_LABEL_SQL = "lpad(trim(mes_aih), 2, '0') || '/' || trim(ano_aih)"
+
+SUBGROUP_LABELS = {
+    "0101": "Acoes de promocao e prevencao em saude",
+    "0201": "Coleta de material",
+    "0202": "Diagnostico em laboratorio clinico",
+    "0203": "Diagnostico por anatomia patologica e citopatologia",
+    "0204": "Diagnostico por radiologia",
+    "0205": "Diagnostico por ultrassonografia",
+    "0206": "Diagnostico por tomografia",
+    "0207": "Diagnostico por ressonancia magnetica",
+    "0208": "Diagnostico por medicina nuclear in vivo",
+    "0209": "Diagnostico por endoscopia",
+    "0210": "Diagnostico por radiologia intervencionista",
+    "0211": "Metodos diagnosticos em especialidades",
+    "0212": "Diagnostico e procedimentos especiais em hemoterapia",
+    "0214": "Diagnostico por teste rapido",
+    "0301": "Consultas, atendimentos e acompanhamentos",
+    "0302": "Fisioterapia",
+    "0303": "Tratamentos clinicos",
+    "0304": "Tratamento em oncologia",
+    "0305": "Tratamento em nefrologia",
+    "0306": "Hemoterapia",
+    "0307": "Tratamentos odontologicos",
+    "0308": "Tratamento de lesoes, envenenamentos e outros",
+    "0309": "Terapias especializadas",
+    "0310": "Parto e nascimento",
+    "0401": "Pequenas cirurgias e cirurgias de pele",
+    "0402": "Cirurgia de glandulas endocrinas",
+    "0403": "Cirurgia do sistema nervoso central e periferico",
+    "0404": "Cirurgia das vias aereas superiores, face, cabeca e pescoco",
+    "0405": "Cirurgia do aparelho da visao",
+    "0406": "Cirurgia do aparelho circulatorio",
+    "0407": "Cirurgia do aparelho digestivo, orgaos anexos e parede abdominal",
+    "0408": "Cirurgia do sistema osteomuscular",
+    "0409": "Cirurgia do aparelho geniturinario",
+    "0410": "Cirurgia de mama",
+    "0411": "Cirurgia obstetrica",
+    "0412": "Cirurgia toracica",
+    "0413": "Cirurgia reparadora",
+    "0414": "Bucomaxilofacial",
+    "0415": "Outras cirurgias",
+    "0416": "Cirurgia em oncologia",
+    "0417": "Anestesiologia",
+    "0418": "Cirurgia em nefrologia",
+    "0501": "Coleta e exames para doacao de orgaos",
+    "0502": "Avaliacao de morte encefalica",
+    "0503": "Acoes relacionadas a doacao de orgaos",
+    "0504": "Processamento de tecidos para transplante",
+    "0505": "Transplante de orgaos, tecidos e celulas",
+    "0506": "Acompanhamento e intercorrencias no pre e pos-transplante",
+    "0603": "Medicamentos de ambito hospitalar",
+    "0702": "Ortese, protese e materiais especiais relacionados ao ato cirurgico",
+    "0801": "Acoes relacionadas ao estabelecimento",
+    "0802": "Acoes relacionadas ao atendimento",
+}
+
+QTD_SUBGROUP_CODES = [
+    "0101",
+    "0201",
+    "0202",
+    "0203",
+    "0204",
+    "0205",
+    "0206",
+    "0207",
+    "0208",
+    "0209",
+    "0210",
+    "0211",
+    "0212",
+    "0214",
+    "0301",
+    "0302",
+    "0303",
+    "0304",
+    "0305",
+    "0306",
+    "0307",
+    "0308",
+    "0309",
+    "0310",
+    "0401",
+    "0402",
+    "0403",
+    "0404",
+    "0405",
+    "0406",
+    "0407",
+    "0408",
+    "0409",
+    "0410",
+    "0411",
+    "0412",
+    "0413",
+    "0414",
+    "0415",
+    "0416",
+    "0418",
+    "0501",
+    "0502",
+    "0503",
+    "0504",
+    "0505",
+    "0506",
+    "0603",
+    "0702",
+    "0801",
+    "0802",
+]
+VALUE_SUBGROUP_CODES = [code for code in QTD_SUBGROUP_CODES if code != "0101"] + ["0417"]
 
 CONTENT_LABELS = {
     "qtd_aprovada": "Quantidade aprovada",
@@ -149,9 +261,66 @@ def format_number(value: Any, content: str) -> str:
     return f"{number:,.0f}".replace(",", ".")
 
 
+def metric_column(content: str) -> str:
+    return "vl_total" if content == "valor_aprovado" else "qtd_total"
+
+
+def metric_expr(content: str) -> str:
+    return f"coalesce({metric_column(content)}, 0)"
+
+
+def subgroup_codes(content: str) -> list[str]:
+    return VALUE_SUBGROUP_CODES if content == "valor_aprovado" else QTD_SUBGROUP_CODES
+
+
+def subgroup_column(content: str, code: str) -> str:
+    return f"vl_{code}" if content == "valor_aprovado" else f"qtd_{code}"
+
+
+def validate_safe_sql(sql: str) -> str:
+    sql = sql.strip().rstrip(";")
+    compact = re.sub(r"\s+", " ", sql).strip()
+    lowered = compact.lower()
+
+    if not lowered.startswith(("select ", "with ")):
+        raise ValueError("Guardrail: somente consultas SELECT ou WITH sao permitidas.")
+
+    forbidden_words = [
+        "insert",
+        "update",
+        "delete",
+        "drop",
+        "alter",
+        "create",
+        "truncate",
+        "copy",
+        "grant",
+        "revoke",
+        "execute",
+        "call",
+        "set",
+        "merge",
+        "vacuum",
+    ]
+    if any(re.search(rf"\b{word}\b", lowered) for word in forbidden_words):
+        raise ValueError("Guardrail: a consulta contem comando nao permitido.")
+
+    if ";" in sql or "--" in sql or "/*" in sql or "*/" in sql:
+        raise ValueError("Guardrail: comentarios ou multiplas instrucoes nao sao permitidos.")
+
+    if FACT_TABLE.lower() not in lowered:
+        raise ValueError(f"Guardrail: use somente a tabela {FACT_TABLE}.")
+
+    return sql + ";"
+
+
 def run_query(sql: str, params: tuple[Any, ...] = ()) -> pd.DataFrame:
+    sql = validate_safe_sql(sql)
     conn = psycopg2.connect(**get_db_config())
     try:
+        conn.set_session(readonly=True)
+        with conn.cursor() as cursor:
+            cursor.execute("set local statement_timeout = %s", (STATEMENT_TIMEOUT_MS,))
         return pd.read_sql_query(sql, conn, params=params)
     finally:
         conn.close()
@@ -182,7 +351,9 @@ def get_gemini_api_key() -> str | None:
 def get_periods() -> pd.DataFrame:
     return cached_query(
         f"""
-        select distinct periodo, periodo_rotulo
+        select distinct
+            {PERIOD_SQL} as periodo,
+            {PERIOD_LABEL_SQL} as periodo_rotulo
         from {FACT_TABLE}
         order by periodo
         """
@@ -193,9 +364,9 @@ def get_periods() -> pd.DataFrame:
 def get_ufs() -> list[str]:
     frame = cached_query(
         f"""
-        select distinct municipio_uf
+        select distinct trim(uf_sigla) as municipio_uf
         from {FACT_TABLE}
-        where municipio_uf is not null
+        where nullif(trim(uf_sigla), '') is not null
         order by municipio_uf
         """
     )
@@ -204,32 +375,34 @@ def get_ufs() -> list[str]:
 
 @st.cache_data(ttl=1800)
 def get_subgroups() -> pd.DataFrame:
-    return cached_query(
-        f"""
-        select subgrupo_coluna, subgrupo_codigo, subgrupo_nome
-        from {SUBGROUP_TABLE}
-        order by subgrupo_coluna
-        """
+    return pd.DataFrame(
+        [
+            {
+                "subgrupo_codigo": code,
+                "subgrupo_nome": SUBGROUP_LABELS.get(code, code),
+            }
+            for code in QTD_SUBGROUP_CODES
+        ]
     )
 
 
 def build_where(filters: Filters) -> tuple[str, list[Any]]:
-    clauses = ["conteudo = %s"]
-    params: list[Any] = [filters.content]
+    clauses = ["1 = 1"]
+    params: list[Any] = []
 
     if filters.period is not None:
-        clauses.append("periodo = %s")
+        clauses.append(f"{PERIOD_SQL} = %s")
         params.append(filters.period)
     elif filters.year is not None:
-        clauses.append("ano = %s")
+        clauses.append("trim(ano_aih)::int = %s")
         params.append(filters.year)
 
     if filters.uf:
-        clauses.append("municipio_uf = %s")
+        clauses.append("upper(trim(uf_sigla)) = %s")
         params.append(filters.uf)
 
     if filters.municipality:
-        clauses.append("upper(municipio_nome) like upper(%s)")
+        clauses.append("upper(trim(nome_municipio)) like upper(%s)")
         params.append(f"%{filters.municipality}%")
 
     return " and ".join(clauses), params
@@ -247,18 +420,20 @@ def sql_literal(value: Any) -> str:
 
 def build_display_where(filters: Filters, alias: str | None = None) -> str:
     prefix = f"{alias}." if alias else ""
-    clauses = [f"{prefix}conteudo = {sql_literal(filters.content)}"]
+    clauses = ["1 = 1"]
 
     if filters.period is not None:
-        clauses.append(f"{prefix}periodo = {sql_literal(filters.period)}")
+        clauses.append(
+            f"make_date(trim({prefix}ano_aih)::int, trim({prefix}mes_aih)::int, 1) = {sql_literal(filters.period)}"
+        )
     elif filters.year is not None:
-        clauses.append(f"{prefix}ano = {filters.year}")
+        clauses.append(f"trim({prefix}ano_aih)::int = {filters.year}")
 
     if filters.uf:
-        clauses.append(f"{prefix}municipio_uf = {sql_literal(filters.uf)}")
+        clauses.append(f"upper(trim({prefix}uf_sigla)) = {sql_literal(filters.uf)}")
 
     if filters.municipality:
-        clauses.append(f"upper({prefix}municipio_nome) like upper({sql_literal('%' + filters.municipality + '%')})")
+        clauses.append(f"upper(trim({prefix}nome_municipio)) like upper({sql_literal('%' + filters.municipality + '%')})")
 
     return "\n  and ".join(clauses)
 
@@ -266,30 +441,32 @@ def build_display_where(filters: Filters, alias: str | None = None) -> str:
 def sql_for_base_info() -> str:
     return f"""select
     count(*) as linhas,
-    count(distinct periodo) as periodos,
-    min(periodo) as primeiro_periodo,
-    max(periodo) as ultimo_periodo,
-    count(distinct municipio_raw) as municipios
+    count(distinct {PERIOD_SQL}) as periodos,
+    min({PERIOD_SQL}) as primeiro_periodo,
+    max({PERIOD_SQL}) as ultimo_periodo,
+    count(distinct nullif(trim(codigo_municipio), '')) as municipios
 from {FACT_TABLE};"""
 
 
 def sql_for_metric_summary(filters: Filters) -> str:
+    total_column = metric_expr(filters.content)
     return f"""select
     count(*) as linhas,
-    count(distinct municipio_raw) as municipios,
-    sum(total_linha) as total,
-    avg(total_linha) as media,
-    max(total_linha) as maior
+    count(distinct nullif(trim(codigo_municipio), '')) as municipios,
+    sum({total_column}) as total,
+    avg({total_column}) as media,
+    max({total_column}) as maior
 from {FACT_TABLE}
 where {build_display_where(filters)};"""
 
 
 def sql_for_timeline(filters: Filters) -> str:
     query_filters = Filters(content=filters.content, uf=filters.uf, municipality=filters.municipality)
+    total_column = metric_expr(filters.content)
     return f"""select
-    periodo,
-    periodo_rotulo,
-    sum(total_linha) as total
+    {PERIOD_SQL} as periodo,
+    {PERIOD_LABEL_SQL} as periodo_rotulo,
+    sum({total_column}) as total
 from {FACT_TABLE}
 where {build_display_where(query_filters)}
 group by periodo, periodo_rotulo
@@ -297,10 +474,11 @@ order by periodo;"""
 
 
 def sql_for_top_municipalities(filters: Filters, limit: int) -> str:
+    total_column = metric_expr(filters.content)
     return f"""select
-    municipio_nome,
-    municipio_uf,
-    sum(total_linha) as total
+    trim(nome_municipio) as municipio_nome,
+    trim(uf_sigla) as municipio_uf,
+    sum({total_column}) as total
 from {FACT_TABLE}
 where {build_display_where(filters)}
 group by municipio_nome, municipio_uf
@@ -309,24 +487,33 @@ limit {limit};"""
 
 
 def sql_for_top_ufs(filters: Filters, limit: int) -> str:
+    total_column = metric_expr(filters.content)
     return f"""select
-    municipio_uf,
-    sum(total_linha) as total
+    trim(uf_sigla) as municipio_uf,
+    sum({total_column}) as total
 from {FACT_TABLE}
 where {build_display_where(filters)}
-  and municipio_uf is not null
+  and nullif(trim(uf_sigla), '') is not null
 group by municipio_uf
 order by total desc
 limit {limit};"""
 
 
 def sql_for_top_subgroups(filters: Filters, limit: int) -> str:
+    values_sql = ",\n        ".join(
+        f"('{code}', '{SUBGROUP_LABELS.get(code, code)}', coalesce(t.{subgroup_column(filters.content, code)}, 0))"
+        for code in subgroup_codes(filters.content)
+    )
     return f"""select
     subgrupo_codigo,
     subgrupo_nome,
     sum(valor) as total
-from public.vw_sih_sus_aih_spabr_long
-where {build_display_where(filters)}
+from {FACT_TABLE} t
+cross join lateral (
+    values
+        {values_sql}
+) as s(subgrupo_codigo, subgrupo_nome, valor)
+where {build_display_where(filters, alias="t")}
 group by subgrupo_codigo, subgrupo_nome
 order by total desc
 limit {limit};"""
@@ -339,38 +526,26 @@ Gere apenas consultas SELECT seguras sobre a base SIH/SUS.
 
 Tabelas disponiveis:
 1. {FACT_TABLE}
-   - periodo DATE
-   - ano SMALLINT
-   - mes SMALLINT
-   - periodo_rotulo TEXT
-   - conteudo TEXT: 'qtd_aprovada' ou 'valor_aprovado'
-   - municipio_codigo INTEGER
-   - municipio_nome TEXT
-   - municipio_uf CHAR(2)
-   - total_linha NUMERIC
-
-2. {LONG_VIEW}
-   - periodo DATE
-   - ano SMALLINT
-   - mes SMALLINT
-   - periodo_rotulo TEXT
-   - conteudo TEXT
-   - municipio_codigo INTEGER
-   - municipio_nome TEXT
-   - municipio_uf CHAR(2)
-   - subgrupo_codigo TEXT
-   - subgrupo_nome TEXT
-   - valor NUMERIC
+   - ano_aih CHAR: ano da AIH
+   - mes_aih CHAR: mes da AIH
+   - codigo_municipio TEXT
+   - nome_municipio TEXT
+   - uf_sigla CHAR(2)
+   - qtd_total INTEGER: quantidade aprovada
+   - vl_total NUMERIC: valor aprovado
+   - colunas qtd_XXXX e vl_XXXX: totais por subgrupo de procedimento
 
 Regras obrigatorias:
 - Responda somente em JSON valido.
-- Use somente SELECT.
+- Use somente SELECT ou WITH.
 - Nunca use INSERT, UPDATE, DELETE, DROP, ALTER, CREATE, TRUNCATE, COPY ou comandos administrativos.
-- Para totais por municipio/UF/periodo use {FACT_TABLE} e total_linha.
-- Para consultas por subgrupo/procedimento use {LONG_VIEW} e valor.
-- Para "quantidade aprovada", use conteudo = 'qtd_aprovada'.
-- Para "valor aprovado", use conteudo = 'valor_aprovado'.
-- Datas mensais devem ser o primeiro dia do mes. Exemplo: janeiro de 2026 = DATE '2026-01-01'.
+- Use somente a tabela {FACT_TABLE}.
+- Para "quantidade aprovada", use qtd_total.
+- Para "valor aprovado", use vl_total.
+- Use coalesce(qtd_total, 0) ou coalesce(vl_total, 0) ao somar ou ordenar totais.
+- Para datas mensais, use make_date(trim(ano_aih)::int, trim(mes_aih)::int, 1).
+- Janeiro de 2026 deve ser filtrado como trim(ano_aih)::int = 2026 e trim(mes_aih)::int = 1.
+- Para municipio, use trim(nome_municipio). Para UF, use trim(uf_sigla).
 - Quando houver ranking ou maior/menor, use order by e limit.
 - Se a pergunta for ampla, use limit 10.
 
@@ -401,40 +576,10 @@ def validate_generated_sql(sql: str) -> str:
     compact = re.sub(r"\s+", " ", sql).strip()
     lowered = compact.lower()
 
-    if not lowered.startswith("select "):
-        raise ValueError("A consulta gerada nao e SELECT.")
-
-    forbidden = [
-        " insert ",
-        " update ",
-        " delete ",
-        " drop ",
-        " alter ",
-        " create ",
-        " truncate ",
-        " copy ",
-        " grant ",
-        " revoke ",
-        " execute ",
-        " call ",
-        " do ",
-        " set ",
-    ]
-    padded = f" {lowered} "
-    if any(token in padded for token in forbidden):
-        raise ValueError("A consulta gerada contem comando nao permitido.")
-
-    if ";" in sql or "--" in sql or "/*" in sql or "*/" in sql:
-        raise ValueError("A consulta gerada contem separadores ou comentarios nao permitidos.")
-
-    allowed_sources = [FACT_TABLE, LONG_VIEW, SUBGROUP_TABLE]
-    if not any(source.lower() in lowered for source in allowed_sources):
-        raise ValueError("A consulta gerada nao usa uma tabela permitida.")
-
     if " limit " not in lowered and not any(term in lowered for term in ["sum(", "count(", "avg(", "max(", "min("]):
         sql = f"{sql}\nlimit 30"
 
-    return sql + ";"
+    return validate_safe_sql(sql)
 
 
 def call_gemini_for_sql(question: str) -> dict[str, Any]:
@@ -492,14 +637,15 @@ def summarize_llm_result(question: str, frame: pd.DataFrame, parsed: dict[str, A
 
 def metric_summary(filters: Filters) -> pd.DataFrame:
     where_sql, params = build_where(filters)
+    total_column = metric_expr(filters.content)
     return cached_query(
         f"""
         select
             count(*) as linhas,
-            count(distinct municipio_raw) as municipios,
-            sum(total_linha) as total,
-            avg(total_linha) as media,
-            max(total_linha) as maior
+            count(distinct nullif(trim(codigo_municipio), '')) as municipios,
+            sum({total_column}) as total,
+            avg({total_column}) as media,
+            max({total_column}) as maior
         from {FACT_TABLE}
         where {where_sql}
         """,
@@ -510,9 +656,13 @@ def metric_summary(filters: Filters) -> pd.DataFrame:
 def timeline(filters: Filters) -> pd.DataFrame:
     query_filters = Filters(content=filters.content, uf=filters.uf, municipality=filters.municipality)
     where_sql, params = build_where(query_filters)
+    total_column = metric_expr(filters.content)
     return cached_query(
         f"""
-        select periodo, periodo_rotulo, sum(total_linha) as total
+        select
+            {PERIOD_SQL} as periodo,
+            {PERIOD_LABEL_SQL} as periodo_rotulo,
+            sum({total_column}) as total
         from {FACT_TABLE}
         where {where_sql}
         group by periodo, periodo_rotulo
@@ -524,12 +674,13 @@ def timeline(filters: Filters) -> pd.DataFrame:
 
 def top_municipalities(filters: Filters, limit: int = 15) -> pd.DataFrame:
     where_sql, params = build_where(filters)
+    total_column = metric_expr(filters.content)
     return cached_query(
         f"""
         select
-            municipio_nome,
-            municipio_uf,
-            sum(total_linha) as total
+            trim(nome_municipio) as municipio_nome,
+            trim(uf_sigla) as municipio_uf,
+            sum({total_column}) as total
         from {FACT_TABLE}
         where {where_sql}
         group by municipio_nome, municipio_uf
@@ -542,12 +693,13 @@ def top_municipalities(filters: Filters, limit: int = 15) -> pd.DataFrame:
 
 def top_ufs(filters: Filters) -> pd.DataFrame:
     where_sql, params = build_where(filters)
+    total_column = metric_expr(filters.content)
     return cached_query(
         f"""
-        select municipio_uf, sum(total_linha) as total
+        select trim(uf_sigla) as municipio_uf, sum({total_column}) as total
         from {FACT_TABLE}
         where {where_sql}
-          and municipio_uf is not null
+          and nullif(trim(uf_sigla), '') is not null
         group by municipio_uf
         order by total desc
         """,
@@ -556,10 +708,9 @@ def top_ufs(filters: Filters) -> pd.DataFrame:
 
 
 def top_subgroups(filters: Filters, limit: int = 15) -> pd.DataFrame:
-    subgroups = get_subgroups()
     values_sql = ",\n".join(
-        f"('{row.subgrupo_coluna}', t.{row.subgrupo_coluna})"
-        for row in subgroups.itertuples(index=False)
+        f"('{code}', '{SUBGROUP_LABELS.get(code, code)}', coalesce(t.{subgroup_column(filters.content, code)}, 0))"
+        for code in subgroup_codes(filters.content)
     )
     where_sql, params = build_where(filters)
     return cached_query(
@@ -567,14 +718,12 @@ def top_subgroups(filters: Filters, limit: int = 15) -> pd.DataFrame:
         select
             d.subgrupo_codigo,
             d.subgrupo_nome,
-            sum(v.valor) as total
+            sum(d.valor) as total
         from {FACT_TABLE} t
         cross join lateral (
             values
             {values_sql}
-        ) as v(subgrupo_coluna, valor)
-        join {SUBGROUP_TABLE} d
-            on d.subgrupo_coluna = v.subgrupo_coluna
+        ) as d(subgrupo_codigo, subgrupo_nome, valor)
         where {where_sql}
         group by d.subgrupo_codigo, d.subgrupo_nome
         order by total desc
@@ -586,18 +735,19 @@ def top_subgroups(filters: Filters, limit: int = 15) -> pd.DataFrame:
 
 def data_sample(filters: Filters, limit: int = 200) -> pd.DataFrame:
     where_sql, params = build_where(filters)
+    total_column = metric_expr(filters.content)
     return cached_query(
         f"""
         select
-            periodo_rotulo,
-            conteudo,
-            municipio_codigo,
-            municipio_nome,
-            municipio_uf,
-            total_linha
+            {PERIOD_LABEL_SQL} as periodo_rotulo,
+            {sql_literal(filters.content)} as conteudo,
+            trim(codigo_municipio) as municipio_codigo,
+            trim(nome_municipio) as municipio_nome,
+            trim(uf_sigla) as municipio_uf,
+            {total_column} as total_linha
         from {FACT_TABLE}
         where {where_sql}
-        order by periodo, municipio_uf, municipio_nome
+        order by {PERIOD_SQL}, municipio_uf, municipio_nome
         limit %s
         """,
         tuple(params + [limit]),
@@ -714,10 +864,10 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
             f"""
             select
                 count(*) as linhas,
-                count(distinct periodo) as periodos,
-                min(periodo) as primeiro_periodo,
-                max(periodo) as ultimo_periodo,
-                count(distinct municipio_raw) as municipios
+                count(distinct {PERIOD_SQL}) as periodos,
+                min({PERIOD_SQL}) as primeiro_periodo,
+                max({PERIOD_SQL}) as ultimo_periodo,
+                count(distinct nullif(trim(codigo_municipio), '')) as municipios
             from {FACT_TABLE}
             """
         )
@@ -843,7 +993,7 @@ def draw_result_chart(frame: pd.DataFrame, chart_type: str | None, content: str)
 def render_sql_query(sql_query: str | None) -> None:
     if not sql_query:
         return
-    with st.expander("Consulta SQL usada"):
+    with st.expander("Consulta SQL usada", expanded=True):
         st.code(sql_query, language="sql")
 
 
@@ -992,8 +1142,7 @@ def render_chat() -> None:
             render_model_used(model_used)
             render_sql_query(sql_query)
             if isinstance(frame, pd.DataFrame):
-                draw_result_chart(frame, chart_type, content)
-                st.dataframe(frame, width="stretch", hide_index=True)
+                st.table(frame)
     st.markdown("</div>", unsafe_allow_html=True)
 
     prompt = st.chat_input("Digite sua pergunta")
@@ -1020,8 +1169,7 @@ def render_chat() -> None:
             render_model_used(model_used)
             render_sql_query(sql_query)
             if isinstance(frame, pd.DataFrame):
-                draw_result_chart(frame, chart_type, content_key)
-                st.dataframe(frame, width="stretch", hide_index=True)
+                st.table(frame)
 
 
 def apply_style() -> None:

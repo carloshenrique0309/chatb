@@ -914,6 +914,89 @@ def detect_subgroup_code(question: str) -> str | None:
     return None
 
 
+@st.cache_data
+def subgroup_name_aliases() -> dict[str, list[str]]:
+    aliases: dict[str, set[str]] = {code: {normalize_text(label)} for code, label in SUBGROUP_LABELS.items()}
+    frame = load_data_dictionary()
+    subgroup_rows = frame[frame["variavel"].str.match(r"^(qtd|vl)_\d{4}$")]
+    prefix_pattern = re.compile(
+        r"^(?:quantidade|valor)\s+(?:de|da|das|do|dos)?\s*",
+    )
+
+    for row in subgroup_rows.itertuples(index=False):
+        code = row.variavel.split("_", 1)[1]
+        description = normalize_text(row.descricao)
+        aliases.setdefault(code, set()).add(description)
+        aliases[code].add(prefix_pattern.sub("", description).strip())
+
+    return {
+        code: sorted((alias for alias in values if len(alias) >= 4), key=len, reverse=True)
+        for code, values in aliases.items()
+    }
+
+
+def detect_subgroup_name(question: str) -> str | None:
+    text = normalize_text(question)
+    matches: list[tuple[int, str]] = []
+    for code, aliases in subgroup_name_aliases().items():
+        for alias in aliases:
+            if re.search(rf"(?<!\w){re.escape(alias)}(?!\w)", text):
+                matches.append((len(alias), code))
+                break
+
+    if not matches:
+        ignored = {
+            "a",
+            "as",
+            "aprovada",
+            "aprovadas",
+            "aprovado",
+            "aprovados",
+            "de",
+            "do",
+            "dos",
+            "da",
+            "das",
+            "em",
+            "no",
+            "nos",
+            "na",
+            "nas",
+            "o",
+            "os",
+            "qual",
+            "quais",
+            "quantidade",
+            "total",
+            "valor",
+        }
+
+        def token_key(value: str) -> set[str]:
+            tokens = set(re.findall(r"[a-z0-9]+", value)) - ignored
+            return {
+                token[:-1] if token.endswith("s") and len(token) > 5 else token
+                for token in tokens
+            }
+
+        question_tokens = token_key(text)
+        fuzzy_matches: list[tuple[int, int, str]] = []
+        for code, aliases in subgroup_name_aliases().items():
+            for alias in aliases:
+                alias_tokens = token_key(alias)
+                overlap = len(alias_tokens & question_tokens)
+                if alias_tokens and overlap == len(alias_tokens):
+                    fuzzy_matches.append((overlap, len(alias), code))
+                    break
+
+        if not fuzzy_matches:
+            return None
+        fuzzy_matches.sort(reverse=True)
+        return fuzzy_matches[0][2]
+
+    matches.sort(reverse=True)
+    return matches[0][1]
+
+
 def answer_dictionary_question(
     question: str,
 ) -> tuple[str, pd.DataFrame | None, str | None, str | None, str] | None:
@@ -1163,7 +1246,7 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
         municipality=detect_municipality(question),
     )
     limit = detect_limit(question)
-    subgroup_code = detect_subgroup_code(question)
+    subgroup_code = detect_subgroup_code(question) or detect_subgroup_name(question)
 
     if any(term in text for term in ["periodos", "base", "registros", "linhas"]):
         frame = cached_query(

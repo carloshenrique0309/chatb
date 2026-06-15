@@ -7,6 +7,7 @@ import unicodedata
 import warnings
 from dataclasses import dataclass
 from datetime import date
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
@@ -32,6 +33,7 @@ DB_CONFIG = {
 }
 
 FACT_TABLE = "public.sus_aih"
+DICTIONARY_PATH = Path(__file__).with_name("data_dictionary.csv")
 BEDROCK_MODEL_ID = "us.anthropic.claude-3-5-haiku-20241022-v1:0"
 BEDROCK_REGION = "us-east-2"
 STATEMENT_TIMEOUT_MS = 20000
@@ -251,6 +253,47 @@ def normalize_text(value: str) -> str:
     value = unicodedata.normalize("NFKD", value)
     value = value.encode("ascii", "ignore").decode("ascii")
     return value.lower()
+
+
+@st.cache_data
+def load_data_dictionary() -> pd.DataFrame:
+    frame = pd.read_csv(DICTIONARY_PATH, encoding="utf-8-sig")
+    frame["variavel"] = frame["variavel"].astype(str).str.lower()
+    frame["tamanho_dicionario"] = frame["tamanho_dicionario"].astype("Int64")
+    return frame
+
+
+def dictionary_prompt_text() -> str:
+    frame = load_data_dictionary()
+    return "\n".join(
+        f"- {row.variavel}: {row.descricao}; categoria={row.categoria}; tipo_postgresql={row.tipo_postgresql}"
+        for row in frame.itertuples(index=False)
+    )
+
+
+def dictionary_display_frame(frame: pd.DataFrame) -> pd.DataFrame:
+    display = frame[
+        [
+            "variavel",
+            "descricao",
+            "categoria",
+            "tipo_postgresql",
+            "tipo_dicionario",
+            "tamanho_dicionario",
+        ]
+    ].copy()
+    display["tipo_dicionario"] = display["tipo_dicionario"].astype("string").fillna("")
+    display["tamanho_dicionario"] = display["tamanho_dicionario"].astype("string").fillna("")
+    return display.rename(
+        columns={
+            "variavel": "Variável",
+            "descricao": "Descrição",
+            "categoria": "Categoria",
+            "tipo_postgresql": "Tipo no PostgreSQL",
+            "tipo_dicionario": "Tipo original",
+            "tamanho_dicionario": "Tamanho original",
+        }
+    )
 
 
 def format_number(value: Any, content: str) -> str:
@@ -568,6 +611,9 @@ Tabelas disponiveis:
 Dicionário de subgrupos:
 {subgroup_prompt_dictionary()}
 
+Dicionário completo das colunas da tabela:
+{dictionary_prompt_text()}
+
 Regras obrigatorias:
 - Responda somente em JSON valido.
 - Use somente SELECT ou WITH.
@@ -578,6 +624,8 @@ Regras obrigatorias:
 - Use coalesce(qtd_total, 0) ou coalesce(vl_total, 0) ao somar ou ordenar totais.
 - Para subgrupos, use a coluna do dicionário. Exemplo: valor aprovado do subgrupo 0204 usa vl_0204; quantidade aprovada do subgrupo 0204 usa qtd_0204.
 - Para ranking de subgrupos, faça um unpivot com cross join lateral values usando as colunas qtd_XXXX ou vl_XXXX.
+- Use somente nomes de colunas presentes no dicionário completo.
+- As colunas qtd_ representam quantidades e as colunas vl_ representam valores monetários.
 - Para datas mensais, use make_date(trim(ano_aih)::int, trim(mes_aih)::int, 1).
 - Janeiro de 2026 deve ser filtrado como trim(ano_aih)::int = 2026 e trim(mes_aih)::int = 1.
 - Para municipio, use trim(nome_municipio). Para UF, use trim(uf_sigla).
@@ -866,6 +914,199 @@ def detect_subgroup_code(question: str) -> str | None:
     return None
 
 
+def answer_dictionary_question(
+    question: str,
+) -> tuple[str, pd.DataFrame | None, str | None, str | None, str] | None:
+    text = normalize_text(question)
+    intent_terms = [
+        "dicionario",
+        "o que significa",
+        "o que e",
+        "qual campo",
+        "quais campos",
+        "qual coluna",
+        "quais colunas",
+        "qual variavel",
+        "quais variaveis",
+        "quantas colunas",
+        "quantos campos",
+        "quantas variaveis",
+        "descricao",
+        "tipo de dado",
+        "tipo no banco",
+        "tamanho",
+        "representa",
+        "serve para",
+        "diferenca",
+    ]
+    if not any(term in text for term in intent_terms):
+        return None
+
+    frame = load_data_dictionary().copy()
+    variables = frame["variavel"].tolist()
+    exact_variables = [
+        variable
+        for variable in sorted(variables, key=len, reverse=True)
+        if re.search(rf"(?<!\w){re.escape(variable)}(?!\w)", text)
+    ]
+
+    if exact_variables:
+        matches = frame[frame["variavel"].isin(exact_variables)]
+    else:
+        code_match = re.search(r"\b(\d{2}|\d{4})\b", text)
+        matches = frame.iloc[0:0]
+        if code_match:
+            code = code_match.group(1)
+            matches = frame[frame["variavel"].str.endswith(f"_{code}")]
+            if "valor" in text:
+                matches = matches[matches["variavel"].str.startswith("vl_")]
+            elif "quantidade" in text or "qtd" in text:
+                matches = matches[matches["variavel"].str.startswith("qtd_")]
+
+    category_terms = {
+        "Valor": ["valor", "monetario", "financeiro"],
+        "Quantidade": ["quantidade", "qtd"],
+        "Localização": ["localizacao", "municipio", "regiao", "estado", "uf"],
+        "População": ["populacao", "habitantes", "fpm"],
+        "Coordenadas": ["coordenadas", "latitude", "longitude"],
+        "Período": ["periodo", "ano", "mes"],
+    }
+    selected_category = next(
+        (
+            category
+            for category, terms in category_terms.items()
+            if any(re.search(rf"\b{re.escape(term)}\b", text) for term in terms)
+        ),
+        None,
+    )
+    is_count_question = any(
+        term in text for term in ["quantas colunas", "quantos campos", "quantas variaveis"]
+    )
+
+    if is_count_question and matches.empty:
+        matches = frame
+        if selected_category:
+            matches = matches[matches["categoria"] == selected_category]
+
+    if matches.empty:
+        candidates = frame
+        if selected_category:
+            candidates = candidates[candidates["categoria"] == selected_category]
+
+        stop_words = {
+            "dicionario",
+            "significa",
+            "descricao",
+            "campo",
+            "campos",
+            "coluna",
+            "colunas",
+            "variavel",
+            "variaveis",
+            "representa",
+            "representam",
+            "serve",
+            "tipo",
+            "dado",
+            "dados",
+            "tamanho",
+            "qual",
+            "quais",
+            "quantas",
+            "quantos",
+            "todos",
+            "todas",
+            "aprovado",
+            "aprovada",
+            "valor",
+            "quantidade",
+            "monetario",
+            "financeiro",
+            "localizacao",
+            "populacao",
+            "coordenadas",
+            "periodo",
+            "banco",
+            "tabela",
+            "para",
+            "pela",
+            "pelo",
+            "com",
+            "uma",
+            "dos",
+            "das",
+            "que",
+            "sao",
+        }
+        tokens = {
+            token
+            for token in re.findall(r"[a-z0-9_]+", text)
+            if len(token) >= 3 and token not in stop_words
+        }
+        for terms in category_terms.values():
+            tokens.difference_update(terms)
+
+        if tokens:
+            searchable = candidates.apply(
+                lambda row: normalize_text(f"{row['variavel']} {row['descricao']} {row['categoria']}"),
+                axis=1,
+            )
+            scores = searchable.map(lambda value: sum(token in value for token in tokens))
+            if scores.max() > 0:
+                matches = candidates[scores == scores.max()]
+        elif selected_category:
+            matches = candidates
+
+    if matches.empty:
+        return (
+            "Não encontrei uma variável correspondente no dicionário da public.sus_aih. Tente informar o nome da coluna, como vl_0204, ou uma descrição, como radiologia.",
+            None,
+            None,
+            None,
+            "Dicionário de dados",
+        )
+
+    matches = matches.sort_values("ordem")
+    if is_count_question:
+        category_suffix = f" na categoria {selected_category}" if selected_category else ""
+        return (
+            f"O dicionário possui {len(matches)} variáveis{category_suffix}.",
+            dictionary_display_frame(matches.head(30)),
+            None,
+            None,
+            "Dicionário de dados",
+        )
+
+    if "diferenca" in text and len(matches) > 1:
+        details = " ".join(
+            f"`{row.variavel}` significa **{row.descricao}** e usa `{row.tipo_postgresql}`."
+            for row in matches.itertuples(index=False)
+        )
+        answer = f"A diferença é a seguinte: {details}"
+    elif len(matches) == 1:
+        row = matches.iloc[0]
+        size = (
+            f", tamanho original {int(row['tamanho_dicionario'])}"
+            if pd.notna(row["tamanho_dicionario"])
+            else ""
+        )
+        answer = (
+            f"A variável `{row['variavel']}` significa **{row['descricao']}**. "
+            f"Ela pertence à categoria {row['categoria']} e usa o tipo "
+            f"`{row['tipo_postgresql']}` no PostgreSQL{size}."
+        )
+    else:
+        answer = f"Encontrei {len(matches)} variáveis relacionadas no dicionário da `public.sus_aih`."
+
+    return (
+        answer,
+        dictionary_display_frame(matches.head(30)),
+        None,
+        None,
+        "Dicionário de dados",
+    )
+
+
 def detect_municipality(question: str) -> str | None:
     text = normalize_text(question)
     patterns = [
@@ -1026,6 +1267,10 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
 
 
 def answer_question(question: str) -> tuple[str, pd.DataFrame | None, str | None, str | None, str]:
+    dictionary_answer = answer_dictionary_question(question)
+    if dictionary_answer is not None:
+        return dictionary_answer
+
     if get_bedrock_api_key():
         try:
             parsed = call_bedrock_for_sql(question)
@@ -1152,6 +1397,81 @@ def render_dashboard() -> None:
         st.plotly_chart(fig, width="stretch")
 
 
+def render_dictionary() -> None:
+    frame = load_data_dictionary()
+    st.markdown(
+        """
+        <section class="chat-hero dictionary-hero">
+            <div>
+                <p class="eyebrow">PUBLIC.SUS_AIH</p>
+                <h1>Dicionário de Dados</h1>
+                <p class="hero-copy">Definições das variáveis da produção hospitalar SIH/SUS, conciliadas com as colunas reais do PostgreSQL.</p>
+            </div>
+            <div class="status-card">
+                <span></span>
+                135 variáveis
+            </div>
+        </section>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    total_quantity = int((frame["categoria"] == "Quantidade").sum())
+    total_value = int((frame["categoria"] == "Valor").sum())
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Variáveis", len(frame))
+    col2.metric("Campos de quantidade", total_quantity)
+    col3.metric("Campos de valor", total_value)
+
+    search_col, category_col = st.columns([1.7, 0.8])
+    with search_col:
+        search = st.text_input(
+            "Buscar no dicionário",
+            placeholder="Ex.: vl_0204, radiologia, município ou população",
+        )
+    with category_col:
+        categories = ["Todas"] + sorted(frame["categoria"].dropna().unique().tolist())
+        category = st.selectbox("Categoria", categories)
+
+    filtered = frame
+    if category != "Todas":
+        filtered = filtered[filtered["categoria"] == category]
+    if search.strip():
+        normalized_search = normalize_text(search.strip())
+        searchable = filtered.apply(
+            lambda row: normalize_text(
+                f"{row['variavel']} {row['descricao']} {row['categoria']} {row['tipo_postgresql']}"
+            ),
+            axis=1,
+        )
+        filtered = filtered[searchable.str.contains(re.escape(normalized_search), regex=True)]
+
+    st.caption(f"{len(filtered)} variável(is) encontrada(s)")
+    st.dataframe(
+        dictionary_display_frame(filtered),
+        width="stretch",
+        height=540,
+        hide_index=True,
+        column_config={
+            "Variável": st.column_config.TextColumn(width="medium"),
+            "Descrição": st.column_config.TextColumn(width="large"),
+            "Categoria": st.column_config.TextColumn(width="small"),
+            "Tipo no PostgreSQL": st.column_config.TextColumn(width="medium"),
+        },
+    )
+
+    st.subheader("Convenções das variáveis")
+    st.markdown(
+        """
+        - `qtd_XXXX`: quantidade aprovada do grupo ou subgrupo de procedimento.
+        - `vl_XXXX`: valor aprovado do grupo ou subgrupo de procedimento.
+        - `qtd_total` e `vl_total`: totais gerais de quantidade e valor.
+        - Os códigos com dois dígitos representam grupos; os códigos com quatro dígitos representam subgrupos.
+        """
+    )
+    st.caption("Fonte: dicionário SUS-AIH-2026-04-08 e estrutura atual da tabela public.sus_aih.")
+
+
 def render_chat() -> None:
     st.markdown(
         """
@@ -1189,7 +1509,7 @@ def render_chat() -> None:
         st.session_state.messages = [
             {
                 "role": "assistant",
-                "content": "Oi, Carlos. Pode perguntar sobre quantidade aprovada, valor aprovado, municípios, UFs, períodos ou subgrupos.",
+                "content": "Oi, Carlos. Pode perguntar sobre os dados hospitalares ou sobre qualquer variável do dicionário da public.sus_aih.",
             }
         ]
 
@@ -1198,8 +1518,8 @@ def render_chat() -> None:
     prompt_options = [
         "Total de quantidade aprovada em janeiro de 2026",
         "Maior valor aprovado em janeiro de 2026",
-        "Top 5 estados por valor aprovado em 2025",
-        "Top 5 subgrupos em SP em jan/2026",
+        "O que significa vl_0204?",
+        "Quais campos representam população?",
     ]
     selected_prompt = None
     for col, option in zip(cols, prompt_options):
@@ -1479,7 +1799,25 @@ def apply_style() -> None:
 def main() -> None:
     st.set_page_config(page_title="Assistente SIH/SUS AIH", layout="wide")
     apply_style()
-    render_chat()
+    navigation = st.navigation(
+        [
+            st.Page(
+                render_chat,
+                title="Assistente",
+                icon=":material/chat:",
+                url_path="assistente",
+                default=True,
+            ),
+            st.Page(
+                render_dictionary,
+                title="Dicionário de dados",
+                icon=":material/menu_book:",
+                url_path="dicionario",
+            ),
+        ],
+        position="top",
+    )
+    navigation.run()
 
 
 if __name__ == "__main__":

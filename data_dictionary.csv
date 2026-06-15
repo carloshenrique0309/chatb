@@ -1,0 +1,136 @@
+﻿ordem,variavel,descricao,categoria,tipo_dicionario,tamanho_dicionario,tipo_postgresql
+1,ano_aih,Ano da autorização da internação,Período,Character,4,character(4)
+2,mes_aih,Mês da autorização da internação,Período,Character,2,character(2)
+3,codigo_municipio_dv,Código do Município IBGE com DV,Localização,Character,7,character(7)
+4,codigo_municipio,Código do Município IBGE,Localização,Character,6,character(6)
+5,nome_municipio,Nome do Município,Localização,Character,40,character(32)
+6,regiao_codigo,Código da Região,Localização,Character,1,integer
+7,regiao_nome,Nome da Região,Localização,Character,12,character varying(12)
+8,uf_codigo,Código da Unidade da Federação,Localização,Character,2,character(2)
+9,uf_sigla,Sigla da Unidade da Federação,Localização,Character,2,character(2)
+10,uf_nome,Nome da Unidade da Federação,Localização,Character,19,character varying(20)
+11,municipio_capital,Município é capital do estado?,Localização,Character,3,character(3)
+12,numero_habitantes,Número de habitantes do município,População,,,integer
+13,faixa_populacao,Faixa populacional do município,População,,,character varying(255)
+14,faixa_populacao_fpm,Faixa populacional utilizada no Fundo de Participação dos Municípios (FPM),População,,,character varying(255)
+15,qtd_0101,Quantidade de Ações coletivas/individuais em saúde,Quantidade,Numeric,8,integer
+16,qtd_01,Quantidade de ações de promoção e prevenção em saúde,Quantidade,Numeric,8,integer
+17,qtd_0201,Quantidade das Coleta de material,Quantidade,Numeric,8,integer
+18,qtd_0202,Quantidade de Diagnósticos em laboratório clínico,Quantidade,Numeric,8,integer
+19,qtd_0203,Quantidade de Diagnósticos por anatomia patológica e citopatologia,Quantidade,Numeric,8,integer
+20,qtd_0204,Quantidade de Diagnósticos por radiologia,Quantidade,Numeric,8,integer
+21,qtd_0205,Quantidade de Diagnósticos por ultrassonografia,Quantidade,Numeric,8,integer
+22,qtd_0206,Quantidade de Diagnósticos por tomografia,Quantidade,Numeric,8,integer
+23,qtd_0207,Quantidade de Diagnósticos por ressonância magnética,Quantidade,Numeric,8,integer
+24,qtd_0208,Quantidade de Diagnósticos por medicina nuclear in vivo,Quantidade,Numeric,8,integer
+25,qtd_0209,Quantidade de Diagnósticos por endoscopia,Quantidade,Numeric,8,integer
+26,qtd_0210,Quantidade de Diagnósticos por radiologia intervencionista,Quantidade,Numeric,8,integer
+27,qtd_0211,Quantidade de Métodos diagnósticos em especialidades,Quantidade,Numeric,8,integer
+28,qtd_0212,Quantidade de Diagnósticos e procedimentos especiais em hemoterapia,Quantidade,Numeric,8,integer
+29,qtd_0214,Quantidade de Diagnósticos por teste rápido,Quantidade,Numeric,8,integer
+30,qtd_02,Quantidade de procedimentos com finalidade diagnóstica,Quantidade,Numeric,8,integer
+31,qtd_0301,Quantidade de Consultas / Atendimentos / Acompanhamentos,Quantidade,Numeric,8,integer
+32,qtd_0302,Quantidade de Fisioterapia,Quantidade,Numeric,8,integer
+33,qtd_0303,Quantidade de Tratamentos clínicos (outras especialidades),Quantidade,Numeric,8,integer
+34,qtd_0304,Quantidade de Tratamentos em oncologia,Quantidade,Numeric,8,integer
+35,qtd_0305,Quantidade de Tratamentos em nefrologia,Quantidade,Numeric,8,integer
+36,qtd_0306,Quantidade de Hemoterapias,Quantidade,Numeric,8,integer
+37,qtd_0307,Quantidade de Tratamentos odontológicos,Quantidade,Numeric,8,integer
+38,qtd_0308,"Quantidade de Tratamentos de lesões, envenenamentos e outros, decorrentes de causas externas",Quantidade,Numeric,8,integer
+39,qtd_0309,Quantidade de Terapias especializadas,Quantidade,Numeric,8,integer
+40,qtd_0310,Quantidade de Partos e nascimentos,Quantidade,Numeric,8,integer
+41,qtd_03,Quantidade de procedimentos clínicos,Quantidade,Numeric,8,integer
+42,qtd_0401,"Quantidade de Pequenas cirurgias e cirurgias de pele, tecido subcutâneo e mucosa",Quantidade,Numeric,8,integer
+43,qtd_0402,Quantidade de Cirurgias de glândulas endócrinas,Quantidade,Numeric,8,integer
+44,qtd_0403,Quantidade de Cirurgias do sistema nervoso central e periférico,Quantidade,Numeric,8,integer
+45,qtd_0404,"Quantidade de Cirurgias das vias aéreas superiores, da face, da cabeça e do pescoço",Quantidade,Numeric,8,integer
+46,qtd_0405,Quantidade de Cirurgias do aparelho da visão,Quantidade,Numeric,8,integer
+47,qtd_0406,Quantidade de Cirurgias do aparelho circulatório,Quantidade,Numeric,8,integer
+48,qtd_0407,"Quantidade de Cirurgias do aparelho digestivo, órgãos anexos e parede abdominal",Quantidade,Numeric,8,integer
+49,qtd_0408,Quantidade de Cirurgias do sistema osteomuscular,Quantidade,Numeric,8,integer
+50,qtd_0409,Quantidade de Cirurgias do aparelho geniturinário,Quantidade,Numeric,8,integer
+51,qtd_0410,Quantidade de Cirurgias de mama,Quantidade,Numeric,8,integer
+52,qtd_0411,Quantidade de Cirurgias obstétrica,Quantidade,Numeric,8,integer
+53,qtd_0412,Quantidade de Cirurgias torácica,Quantidade,Numeric,8,integer
+54,qtd_0413,Quantidade de Cirurgias reparadora,Quantidade,Numeric,8,integer
+55,qtd_0414,Quantidade de Bucomaxilofacial,Quantidade,Numeric,8,integer
+56,qtd_0415,Quantidade de Outras cirurgias,Quantidade,Numeric,8,integer
+57,qtd_0416,Quantidade de Cirurgias em oncologia,Quantidade,Numeric,8,integer
+58,qtd_0418,Quantidade de Cirurgias em nefrologia,Quantidade,Numeric,8,integer
+59,qtd_04,Quantidade de procedimentos cirúrgicos,Quantidade,Numeric,8,integer
+60,qtd_0501,"Quantidade de Coletas e exames para fins de doação de órgãos, tecidos e células e de transplante",Quantidade,Numeric,8,integer
+61,qtd_0502,Quantidade de Avaliações de mortes encefálica,Quantidade,Numeric,8,integer
+62,qtd_0503,Quantidade de Ações relacionadas à doação de órgãos e tecidos para transplante,Quantidade,Numeric,8,integer
+63,qtd_0504,Quantidade de Processamentos de tecidos para transplante,Quantidade,Numeric,8,integer
+64,qtd_0505,"Quantidade de Transplantes de órgãos, tecidos e células",Quantidade,Numeric,8,integer
+65,qtd_0506,Quantidade de Acompanhamentos e intercorrências no pré e pós-transplante,Quantidade,Numeric,8,integer
+66,qtd_05,"Quantidade de transplantes de órgãos, tecidos e células",Quantidade,Numeric,8,integer
+67,qtd_0603,Quantidade de Medicamentos de âmbito hospitalar e urgência,Quantidade,Numeric,8,integer
+68,qtd_06,Quantidade de medicamentos,Quantidade,Numeric,8,integer
+69,qtd_0702,"Quantidade de Órteses, próteses e materiais especiais relacionados ao ato cirúrgico",Quantidade,Numeric,8,integer
+70,qtd_07,"Quantidade de órteses, próteses e materiais especiais",Quantidade,Numeric,8,integer
+71,qtd_0801,Quantidade de Ações relacionadas ao estabelecimento,Quantidade,Numeric,8,integer
+72,qtd_0802,Quantidade de Ações relacionadas ao atendimento,Quantidade,Numeric,8,integer
+73,qtd_08,Quantidade de ações complementares da atenção à saúde,Quantidade,Numeric,8,integer
+74,qtd_total,Quantidade total de procedimentos,Quantidade,Numeric,8,integer
+75,vl_0201,Valor das Coletas de material,Valor,Numeric,8,numeric
+76,vl_0202,Valor dos Diagnósticos em laboratório clínico,Valor,Numeric,8,numeric
+77,vl_0203,Valor dos Diagnósticos por anatomia patológica e citopatologia,Valor,Numeric,8,numeric
+78,vl_0204,Valor dos Diagnósticos por radiologia,Valor,Numeric,8,numeric
+79,vl_0205,Valor dos Diagnósticos por ultrassonografia,Valor,Numeric,8,numeric
+80,vl_0206,Valor dos Diagnósticos por tomografia,Valor,Numeric,8,numeric
+81,vl_0207,Valor dos Diagnósticos por ressonância magnética,Valor,Numeric,8,numeric
+82,vl_0208,Valor dos Diagnósticos por medicina nuclear in vivo,Valor,Numeric,8,numeric
+83,vl_0209,Valor dos Diagnósticos por endoscopia,Valor,Numeric,8,numeric
+84,vl_0210,Valor dos Diagnósticos por radiologia intervencionista,Valor,Numeric,8,numeric
+85,vl_0211,Valor dos Métodos diagnósticos em especialidades,Valor,Numeric,8,numeric
+86,vl_0212,Valor dos Diagnósticos e procedimentos especiais em hemoterapia,Valor,Numeric,8,numeric
+87,vl_0214,Valor dos Diagnósticos por teste rápido,Valor,Numeric,8,numeric
+88,vl_02,Valor total dos procedimentos com finalidade diagnóstica,Valor,Numeric,8,numeric
+89,vl_0301,Valor das Consultas / Atendimentos / Acompanhamentos,Valor,Numeric,8,numeric
+90,vl_0302,Valor das Fisioterapias,Valor,Numeric,8,numeric
+91,vl_0303,Valor dos Tratamentos clínicos (outras especialidades),Valor,Numeric,8,numeric
+92,vl_0304,Valor dos Tratamentos em oncologia,Valor,Numeric,8,numeric
+93,vl_0305,Valor dos Tratamentos em nefrologia,Valor,Numeric,8,numeric
+94,vl_0306,Valor das Hemoterapias,Valor,Numeric,8,numeric
+95,vl_0307,Valor dos Tratamentos odontológicos,Valor,Numeric,8,numeric
+96,vl_0308,"Valor dos Tratamentos de lesões, envenenamentos e outros, decorrentes de causas externas",Valor,Numeric,8,numeric
+97,vl_0309,Valor das Terapias especializadas,Valor,Numeric,8,numeric
+98,vl_0310,Valor dos Partos e nascimento,Valor,Numeric,8,numeric
+99,vl_03,Valor total dos procedimentos clínicos,Valor,Numeric,8,numeric
+100,vl_0401,"Valor das Pequenas cirurgias e cirurgias de pele, tecido subcutâneo e mucosa",Valor,Numeric,8,numeric
+101,vl_0402,Valor das Cirurgias de glândulas endócrinas,Valor,Numeric,8,numeric
+102,vl_0403,Valor das Cirurgias do sistema nervoso central e periférico,Valor,Numeric,8,numeric
+103,vl_0404,"Valor das Cirurgias das vias aéreas superiores, da face, da cabeça e do pescoço",Valor,Numeric,8,numeric
+104,vl_0405,Valor das Cirurgias do aparelho da visão,Valor,Numeric,8,numeric
+105,vl_0406,Valor das Cirurgias do aparelho circulatório,Valor,Numeric,8,numeric
+106,vl_0407,"Valor das Cirurgias do aparelho digestivo, órgãos anexos e parede abdominal",Valor,Numeric,8,numeric
+107,vl_0408,Valor das Cirurgias do sistema osteomuscular,Valor,Numeric,8,numeric
+108,vl_0409,Valor das Cirurgias do aparelho geniturinário,Valor,Numeric,8,numeric
+109,vl_0410,Valor das Cirurgias de mama,Valor,Numeric,8,numeric
+110,vl_0411,Valor das Cirurgias obstétrica,Valor,Numeric,8,numeric
+111,vl_0412,Valor das Cirurgias torácica,Valor,Numeric,8,numeric
+112,vl_0413,Valor das Cirurgias reparadora,Valor,Numeric,8,numeric
+113,vl_0414,Valor das Bucomaxilofacial,Valor,Numeric,8,numeric
+114,vl_0415,Valor das Outras cirurgias,Valor,Numeric,8,numeric
+115,vl_0416,Valor das Cirurgias em oncologia,Valor,Numeric,8,numeric
+116,vl_0417,Valor das Anestesiologia,Valor,Numeric,8,numeric
+117,vl_0418,Valor das Cirurgias em nefrologia,Valor,Numeric,8,numeric
+118,vl_04,Valor total dos procedimentos cirúrgicos,Valor,Numeric,8,numeric
+119,vl_0501,"Valor das Coletas e exames para fins de doação de órgãos, tecidos e células e de transplante",Valor,Numeric,8,numeric
+120,vl_0502,Valor das Avaliações de mortes encefálica,Valor,Numeric,8,numeric
+121,vl_0503,Valor das Ações relacionadas à doação de órgãos e tecidos para transplante,Valor,Numeric,8,numeric
+122,vl_0504,Valor dos Processamentos de tecidos para transplante,Valor,Numeric,8,numeric
+123,vl_0505,"Valor das Transplantes de órgãos, tecidos e células",Valor,Numeric,8,numeric
+124,vl_0506,Valor das Acompanhamentos e intercorrências no pré e pós-transplante,Valor,Numeric,8,numeric
+125,vl_05,"Valor total dos transplantes de órgãos, tecidos e células",Valor,Numeric,8,numeric
+126,vl_0603,Valor dos Medicamentos de âmbito hospitalar e urgência,Valor,Numeric,8,numeric
+127,vl_06,Valor total dos medicamentos,Valor,Numeric,8,numeric
+128,vl_0702,"Valor das Órteses, próteses e materiais especiais relacionados ao ato cirúrgico",Valor,Numeric,8,numeric
+129,vl_07,"Valor total das órteses, próteses e materiais especiais",Valor,Numeric,8,numeric
+130,vl_0801,Valor das Ações relacionadas ao estabelecimento,Valor,Numeric,8,numeric
+131,vl_0802,Valor das Ações relacionadas ao atendimento,Valor,Numeric,8,numeric
+132,vl_08,Valor total das ações complementares da atenção à saúde,Valor,Numeric,8,numeric
+133,vl_total,Valor total dos procedimentos,Valor,Numeric,8,numeric
+134,longitude,Longitude,Coordenadas,Numeric,8,"numeric(15,7)"
+135,latitude,Latitude,Coordenadas,Numeric,8,"numeric(15,7)"

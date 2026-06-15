@@ -1688,16 +1688,10 @@ def render_chat() -> None:
         unsafe_allow_html=True,
     )
 
-    model_status = (
-        f"Amazon Bedrock ativo ({get_bedrock_model_id()})"
-        if get_bedrock_api_key()
-        else "Amazon Bedrock configurável por Secrets; fallback por regras ativo"
-    )
     st.markdown(
-        f"""
+        """
         <div class="agent-card">
             <strong>Agente gerador de SQL</strong>
-            <span>{model_status}</span>
         </div>
         """,
         unsafe_allow_html=True,

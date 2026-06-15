@@ -592,6 +592,33 @@ from {FACT_TABLE}
 where {build_display_where(filters)};"""
 
 
+def sql_for_subgroup_totals(filters: Filters, codes: list[str]) -> str:
+    values_sql = ",\n        ".join(
+        f"('{code}', '{SUBGROUP_LABELS.get(code, code)}', coalesce(t.{subgroup_column(filters.content, code)}, 0))"
+        for code in codes
+    )
+    return f"""with resultados as (
+    select
+        s.subgrupo_codigo,
+        s.subgrupo_nome,
+        sum(s.valor) as total
+    from {FACT_TABLE} t
+    cross join lateral (
+        values
+        {values_sql}
+    ) as s(subgrupo_codigo, subgrupo_nome, valor)
+    where {build_display_where(filters, alias="t")}
+    group by s.subgrupo_codigo, s.subgrupo_nome
+)
+select subgrupo_codigo, subgrupo_nome, total
+from (
+    select subgrupo_codigo, subgrupo_nome, total from resultados
+    union all
+    select 'TOTAL', 'Total combinado', sum(total) from resultados
+) as resposta
+order by case when subgrupo_codigo = 'TOTAL' then 1 else 0 end, subgrupo_codigo;"""
+
+
 def get_schema_prompt() -> str:
     return f"""
 Você é um agente gerador de SQL para PostgreSQL.
@@ -838,6 +865,39 @@ def subgroup_total(filters: Filters, code: str) -> pd.DataFrame:
     )
 
 
+def subgroup_totals(filters: Filters, codes: list[str]) -> pd.DataFrame:
+    values_sql = ",\n".join(
+        f"('{code}', '{SUBGROUP_LABELS.get(code, code)}', coalesce(t.{subgroup_column(filters.content, code)}, 0))"
+        for code in codes
+    )
+    where_sql, params = build_where(filters)
+    return cached_query(
+        f"""
+        with resultados as (
+            select
+                s.subgrupo_codigo,
+                s.subgrupo_nome,
+                sum(s.valor) as total
+            from {FACT_TABLE} t
+            cross join lateral (
+                values
+                {values_sql}
+            ) as s(subgrupo_codigo, subgrupo_nome, valor)
+            where {where_sql}
+            group by s.subgrupo_codigo, s.subgrupo_nome
+        )
+        select subgrupo_codigo, subgrupo_nome, total
+        from (
+            select subgrupo_codigo, subgrupo_nome, total from resultados
+            union all
+            select 'TOTAL', 'Total combinado', sum(total) from resultados
+        ) as resposta
+        order by case when subgrupo_codigo = 'TOTAL' then 1 else 0 end, subgrupo_codigo
+        """,
+        tuple(params),
+    )
+
+
 def data_sample(filters: Filters, limit: int = 200) -> pd.DataFrame:
     where_sql, params = build_where(filters)
     total_column = metric_expr(filters.content)
@@ -935,7 +995,7 @@ def subgroup_name_aliases() -> dict[str, list[str]]:
     }
 
 
-def detect_subgroup_name(question: str) -> str | None:
+def detect_subgroup_names(question: str) -> list[str]:
     text = normalize_text(question)
     matches: list[tuple[int, str]] = []
     for code, aliases in subgroup_name_aliases().items():
@@ -944,57 +1004,80 @@ def detect_subgroup_name(question: str) -> str | None:
                 matches.append((len(alias), code))
                 break
 
-    if not matches:
-        ignored = {
-            "a",
-            "as",
-            "aprovada",
-            "aprovadas",
-            "aprovado",
-            "aprovados",
-            "de",
-            "do",
-            "dos",
-            "da",
-            "das",
-            "em",
-            "no",
-            "nos",
-            "na",
-            "nas",
-            "o",
-            "os",
-            "qual",
-            "quais",
-            "quantidade",
-            "total",
-            "valor",
+    if matches:
+        longest = max(length for length, _ in matches)
+        return sorted({code for length, code in matches if length == longest})
+
+    ignored = {
+        "a",
+        "as",
+        "aprovada",
+        "aprovadas",
+        "aprovado",
+        "aprovados",
+        "de",
+        "do",
+        "dos",
+        "da",
+        "das",
+        "em",
+        "no",
+        "nos",
+        "na",
+        "nas",
+        "o",
+        "os",
+        "qual",
+        "quais",
+        "quantidade",
+        "total",
+        "valor",
+    }
+
+    def token_key(value: str) -> set[str]:
+        tokens = set(re.findall(r"[a-z0-9]+", value)) - ignored
+        return {
+            token[:-1] if token.endswith("s") and len(token) > 5 else token
+            for token in tokens
         }
 
-        def token_key(value: str) -> set[str]:
-            tokens = set(re.findall(r"[a-z0-9]+", value)) - ignored
-            return {
-                token[:-1] if token.endswith("s") and len(token) > 5 else token
-                for token in tokens
-            }
+    question_tokens = token_key(text)
+    if not question_tokens:
+        return []
 
-        question_tokens = token_key(text)
-        fuzzy_matches: list[tuple[int, int, str]] = []
-        for code, aliases in subgroup_name_aliases().items():
-            for alias in aliases:
-                alias_tokens = token_key(alias)
-                overlap = len(alias_tokens & question_tokens)
-                if alias_tokens and overlap == len(alias_tokens):
-                    fuzzy_matches.append((overlap, len(alias), code))
-                    break
+    scores: dict[str, tuple[int, float, int]] = {}
+    for code, aliases in subgroup_name_aliases().items():
+        best_score = (0, 0.0, 0)
+        for alias in aliases:
+            alias_tokens = token_key(alias)
+            if not alias_tokens:
+                continue
+            overlap = len(alias_tokens & question_tokens)
+            score = (overlap, overlap / len(alias_tokens), len(alias))
+            if score > best_score:
+                best_score = score
+        if best_score[0] > 0:
+            scores[code] = best_score
 
-        if not fuzzy_matches:
-            return None
-        fuzzy_matches.sort(reverse=True)
-        return fuzzy_matches[0][2]
+    if not scores:
+        return []
 
-    matches.sort(reverse=True)
-    return matches[0][1]
+    if len(question_tokens) == 1:
+        return sorted(scores)
+
+    max_overlap = max(score[0] for score in scores.values())
+    candidates = {
+        code: score for code, score in scores.items() if score[0] == max_overlap
+    }
+    max_ratio = max(score[1] for score in candidates.values())
+    return sorted(
+        code for code, score in candidates.items() if score[1] == max_ratio
+    )
+
+
+def detect_subgroup_name(question: str) -> str | None:
+    matches = detect_subgroup_names(question)
+    return matches[0] if matches else None
 
 
 def answer_dictionary_question(
@@ -1246,7 +1329,12 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
         municipality=detect_municipality(question),
     )
     limit = detect_limit(question)
-    subgroup_code = detect_subgroup_code(question) or detect_subgroup_name(question)
+    explicit_subgroup_code = detect_subgroup_code(question)
+    matched_subgroup_codes = (
+        [explicit_subgroup_code]
+        if explicit_subgroup_code
+        else detect_subgroup_names(question)
+    )
 
     if any(term in text for term in ["periodos", "base", "registros", "linhas"]):
         frame = cached_query(
@@ -1270,26 +1358,53 @@ def answer_question_rules(question: str) -> tuple[str, pd.DataFrame | None, str 
             "Fallback por regras",
         )
 
-    if subgroup_code:
-        if not has_subgroup_column(filters.content, subgroup_code):
+    if matched_subgroup_codes:
+        available_codes = [
+            code for code in matched_subgroup_codes if has_subgroup_column(filters.content, code)
+        ]
+        if not available_codes:
             label = CONTENT_LABELS[filters.content]
-            subgrupo_nome = SUBGROUP_LABELS.get(subgroup_code, subgroup_code)
+            names = ", ".join(
+                f"{code} - {SUBGROUP_LABELS.get(code, code)}"
+                for code in matched_subgroup_codes
+            )
             return (
-                f"Não existe coluna de {label.lower()} para o subgrupo {subgroup_code} - {subgrupo_nome} nesta tabela.",
+                f"Não existe coluna de {label.lower()} para {names} nesta tabela.",
                 None,
                 None,
                 None,
                 "Fallback por regras",
             )
 
-        frame = subgroup_total(filters, subgroup_code)
-        total = frame.iloc[0]["total"] if not frame.empty else 0
-        subgrupo_nome = SUBGROUP_LABELS.get(subgroup_code, subgroup_code)
-        message = (
-            f"O total do subgrupo {subgroup_code} - {subgrupo_nome} para "
-            f"{describe_filters(filters)} é {format_number(total, filters.content)}."
+        if len(available_codes) == 1:
+            subgroup_code = available_codes[0]
+            frame = subgroup_total(filters, subgroup_code)
+            total = frame.iloc[0]["total"] if not frame.empty else 0
+            subgrupo_nome = SUBGROUP_LABELS.get(subgroup_code, subgroup_code)
+            message = (
+                f"O total do subgrupo {subgroup_code} - {subgrupo_nome} para "
+                f"{describe_filters(filters)} é {format_number(total, filters.content)}."
+            )
+            return message, frame, None, sql_for_subgroup_total(filters, subgroup_code), "Fallback por regras"
+
+        frame = subgroup_totals(filters, available_codes)
+        total_rows = frame[frame["subgrupo_codigo"] == "TOTAL"]
+        combined_total = total_rows.iloc[0]["total"] if not total_rows.empty else 0
+        names = ", ".join(
+            f"{code} - {SUBGROUP_LABELS.get(code, code)}" for code in available_codes
         )
-        return message, frame, None, sql_for_subgroup_total(filters, subgroup_code), "Fallback por regras"
+        message = (
+            f"Encontrei {len(available_codes)} subgrupos relacionados: {names}. "
+            f"O total combinado para {describe_filters(filters)} é "
+            f"{format_number(combined_total, filters.content)}."
+        )
+        return (
+            message,
+            frame,
+            None,
+            sql_for_subgroup_totals(filters, available_codes),
+            "Fallback por regras",
+        )
 
     if "subgrupo" in text or "procedimento" in text:
         frame = top_subgroups(filters, limit=limit)

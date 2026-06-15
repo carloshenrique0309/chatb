@@ -1671,78 +1671,24 @@ def render_dictionary() -> None:
 
 
 def render_chat() -> None:
-    st.markdown(
-        """
-        <section class="chat-hero">
-            <div>
-                <p class="eyebrow">SIH/SUS DATASUS</p>
-                <h1>Assistente SIH/SUS - AIH Hospitalar</h1>
-                <p class="hero-copy">Faça perguntas sobre a produção hospitalar e veja a consulta SQL executada junto com o resultado.</p>
-            </div>
-            <div class="status-card">
-                <span></span>
-                Tabela: public.sus_aih
-            </div>
-        </section>
-        """,
-        unsafe_allow_html=True,
-    )
+    st.title("Agente gerador de SQL")
 
-    model_status = (
-        f"Amazon Bedrock ativo ({get_bedrock_model_id()})"
-        if get_bedrock_api_key()
-        else "Amazon Bedrock configurável por Secrets; fallback por regras ativo"
-    )
-    st.markdown(
-        f"""
-        <div class="agent-card">
-            <strong>Agente gerador de SQL</strong>
-            <span>{model_status}</span>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    if "messages" not in st.session_state:
-        st.session_state.messages = [
-            {
-                "role": "assistant",
-                "content": "Oi, Carlos. Pode perguntar sobre os dados hospitalares ou sobre qualquer variável do dicionário da public.sus_aih.",
-            }
-        ]
-
-    st.markdown('<div class="quick-prompts">', unsafe_allow_html=True)
-    cols = st.columns(4)
-    prompt_options = [
-        "Total de quantidade aprovada em janeiro de 2026",
-        "Maior valor aprovado em janeiro de 2026",
-        "O que significa vl_0204?",
-        "Quais campos representam população?",
-    ]
-    selected_prompt = None
-    for col, option in zip(cols, prompt_options):
-        with col:
-            if st.button(option, use_container_width=True):
-                selected_prompt = option
-    st.markdown("</div>", unsafe_allow_html=True)
+    if st.session_state.get("chat_ui_version") != "sql-only-v1":
+        st.session_state.messages = []
+        st.session_state.chat_ui_version = "sql-only-v1"
 
     st.markdown('<div class="chat-shell">', unsafe_allow_html=True)
     for message in st.session_state.messages:
         with st.chat_message(message["role"]):
             st.write(message["content"])
             frame = message.get("frame")
-            chart_type = message.get("chart_type")
-            content = message.get("content_key", "qtd_aprovada")
             sql_query = message.get("sql_query")
-            model_used = message.get("model_used")
-            render_model_used(model_used)
             render_sql_query(sql_query)
             if isinstance(frame, pd.DataFrame):
                 st.table(frame)
     st.markdown("</div>", unsafe_allow_html=True)
 
-    prompt = st.chat_input("Pergunte sobre a tabela public.sus_aih")
-    prompt = selected_prompt or prompt
+    prompt = st.chat_input("Digite sua pergunta")
     if prompt:
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user"):
@@ -1757,12 +1703,10 @@ def render_chat() -> None:
             "chart_type": chart_type,
             "content_key": content_key,
             "sql_query": sql_query,
-            "model_used": model_used,
         }
         st.session_state.messages.append(response)
         with st.chat_message("assistant"):
             st.write(answer)
-            render_model_used(model_used)
             render_sql_query(sql_query)
             if isinstance(frame, pd.DataFrame):
                 st.table(frame)
@@ -1995,27 +1939,9 @@ def apply_style() -> None:
 
 
 def main() -> None:
-    st.set_page_config(page_title="Assistente SIH/SUS AIH", layout="wide")
+    st.set_page_config(page_title="Agente gerador de SQL", layout="wide")
     apply_style()
-    navigation = st.navigation(
-        [
-            st.Page(
-                render_chat,
-                title="Assistente",
-                icon=":material/chat:",
-                url_path="assistente",
-                default=True,
-            ),
-            st.Page(
-                render_dictionary,
-                title="Dicionário de dados",
-                icon=":material/menu_book:",
-                url_path="dicionario",
-            ),
-        ],
-        position="top",
-    )
-    navigation.run()
+    render_chat()
 
 
 if __name__ == "__main__":
